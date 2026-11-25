@@ -87,6 +87,10 @@ export default function TutorPage() {
           question: userMessage.content,
           subjectIds: selectedSubjects,
           conversationId,
+          history: messages.slice(-6).map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
         }),
       });
 
@@ -108,7 +112,18 @@ export default function TutorPage() {
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al procesar la respuesta");
+      const errorText = err instanceof Error ? err.message : "Error al procesar la respuesta";
+      setError(errorText);
+      const errorMsg: Message = {
+        id: Date.now() + 1,
+        conversation_id: conversationId || "temp",
+        user_id: "assistant",
+        role: "assistant",
+        content: `⚠️ **Aviso:** No se pudo obtener la respuesta en este momento (${errorText}). Por favor, vuelve a presionar enviar.`,
+        citations: [],
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setLoading(false);
     }

@@ -54,8 +54,16 @@ export async function getGeminiClient(): Promise<{
 
 export const PRIMARY_STUDY_MODEL = "gemini-3.5-flash-lite";
 
+// Lista de modelos ordenados por velocidad y cuota para tolerancia a fallos
+const STUDY_MODELS_CASCADE = [
+  "gemini-3.5-flash-lite",
+  "gemini-3.6-flash",
+  "gemini-3.5-flash",
+  "gemini-3.8-flash",
+];
+
 /**
- * Genera contenido de estudio de forma ultra-rápida y confiable con reintentos instantáneos.
+ * Genera contenido de estudio de forma ultra-rápida y confiable con cascada de modelos ante picos de demanda (503/429).
  */
 export async function generateStudyContent(
   ai: GoogleGenAI,
@@ -66,10 +74,11 @@ export async function generateStudyContent(
   }
 ) {
   let lastError: unknown = null;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+
+  for (const model of STUDY_MODELS_CASCADE) {
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash-lite",
+        model,
         contents: params.contents,
         config: {
           systemInstruction: params.systemInstruction,
@@ -77,13 +86,19 @@ export async function generateStudyContent(
         },
       });
       return response;
-    } catch (err) {
+    } catch (err: unknown) {
       lastError = err;
-      if (attempt < 3) {
-        await new Promise((r) => setTimeout(r, 400));
+      const status = (err as { status?: number })?.status;
+      console.warn(`Modelo ${model} no disponible (${status || "error"}), probando siguiente modelo de respaldo...`);
+      // Si el error fue por demanda alta (503) o límite (429), pasar inmediatamente al siguiente modelo
+      if (status === 503 || status === 429) {
+        continue;
       }
+      // Pequeña pausa antes de intentar el siguiente
+      await new Promise((r) => setTimeout(r, 300));
     }
   }
+
   throw lastError;
 }
 
