@@ -53,10 +53,9 @@ export async function getGeminiClient(): Promise<{
 }
 
 export const PRIMARY_STUDY_MODEL = "gemini-3.5-flash-lite";
-export const FALLBACK_STUDY_MODELS = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.8-flash"];
 
 /**
- * Genera contenido de estudio con reintentos automáticos en modelos compatibles.
+ * Genera contenido de estudio de forma ultra-rápida y confiable con reintentos instantáneos.
  */
 export async function generateStudyContent(
   ai: GoogleGenAI,
@@ -67,20 +66,22 @@ export async function generateStudyContent(
   }
 ) {
   let lastError: unknown = null;
-  for (const model of FALLBACK_STUDY_MODELS) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const response = await ai.models.generateContent({
-        model,
+        model: "gemini-3.5-flash-lite",
         contents: params.contents,
         config: {
           systemInstruction: params.systemInstruction,
-          temperature: params.temperature,
+          temperature: params.temperature ?? 0.6,
         },
       });
       return response;
     } catch (err) {
       lastError = err;
-      console.warn(`Aviso: Error con modelo ${model}, intentando siguiente...`);
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, 400));
+      }
     }
   }
   throw lastError;

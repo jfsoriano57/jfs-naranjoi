@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -9,10 +10,13 @@ import {
   Key, 
   Sparkles, 
   LogOut, 
-  Layers
+  Layers,
+  Smartphone
 } from "lucide-react";
+import { InstalarAppModal } from "@/components/InstalarAppModal";
 
 export function Navbar({ userEmail }: { userEmail: string | null }) {
+  const [openInstalar, setOpenInstalar] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -64,8 +68,18 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
           })}
         </nav>
 
-        {/* Usuario y cerrar sesión */}
-        <div className="flex items-center gap-3">
+        {/* Usuario, botón de instalar y cerrar sesión */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            onClick={() => setOpenInstalar(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-orange-500/10 hover:bg-orange-500/20 text-orange-700 dark:text-orange-300 border border-orange-200/50 dark:border-orange-900/30 transition shadow-sm"
+            title="Cómo usar JFSP como App en tu móvil o PC"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-orange-600" />
+            <span className="hidden sm:inline">Instalar App</span>
+            <span className="sm:hidden text-[11px]">App</span>
+          </button>
+
           {userEmail && (
             <span className="text-xs text-muted hidden md:inline truncate max-w-[150px]">
               {userEmail}
@@ -80,6 +94,11 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
           </button>
         </div>
       </div>
+
+      <InstalarAppModal
+        open={openInstalar}
+        onClose={() => setOpenInstalar(false)}
+      />
     </header>
   );
 }
