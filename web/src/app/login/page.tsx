@@ -67,7 +67,7 @@ export default function LoginPage() {
             <BookOpen className="w-8 h-8" />
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-            NARANJO
+            JFSP
           </h1>
           <p className="text-muted text-sm mt-2">
             Tu tutor inteligente de estudio con tus propios materiales y libros

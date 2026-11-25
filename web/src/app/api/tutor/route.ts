@@ -72,7 +72,7 @@ export async function POST(request: Request) {
         .join("\n\n---\n\n");
     }
 
-    const systemPrompt = `Eres NARANJO, un tutor universitario y pedagógico experto.
+    const systemPrompt = `Eres JFSP, un tutor universitario y pedagógico experto.
 Tu misión es resolver las dudas, explicar conceptos y resolver ejercicios de los estudiantes basándote en sus materiales de estudio.
 
 DIRECTRICES FUNDAMENTALES:

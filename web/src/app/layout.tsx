@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NARANJO · Tutor Inteligente de Estudio",
+  title: "JFSP · Tutor Inteligente de Estudio",
   description: "Estudia con tus propios libros, apuntes y programas académicos con asistencia de Inteligencia Artificial.",
 };
 

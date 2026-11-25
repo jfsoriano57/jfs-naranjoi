@@ -38,7 +38,7 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
             <BookOpen className="w-5 h-5" />
           </div>
           <span className="font-extrabold text-lg tracking-tight text-foreground">
-            NARANJO
+            JFSP
           </span>
         </Link>
 
