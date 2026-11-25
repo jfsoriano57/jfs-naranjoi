@@ -128,11 +128,16 @@ export function SubirMaterialModal({
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-xl font-bold mb-1 text-foreground">
-              Subir Material de Estudio
-            </h3>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-xl font-bold text-foreground">
+                Subir Material de Estudio
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-50 text-green-700 border border-green-200">
+                Hasta 100 MB
+              </span>
+            </div>
             <p className="text-sm text-muted mb-5">
-              Sube PDFs, libros, programas o fotos de apuntes para que tu tutor IA aprenda de ellos.
+              Sube libros completos en PDF, programas o fotos de apuntes para que tu tutor IA aprenda de ellos.
             </p>
 
             {error && (
@@ -234,7 +239,7 @@ export function SubirMaterialModal({
                   disabled={loading || !file}
                   className="btn-primary"
                 >
-                  {loading ? "Procesando..." : "Subir y Procesar"}
+                  {loading ? "Procesando..." : "Subir a Bóveda y Procesar"}
                 </button>
               </div>
             </form>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Search, Globe, BookOpen, Download, ExternalLink, Loader2, X, PlusCircle, AlertCircle } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 type BookResult = {
   id: string;
@@ -57,20 +58,35 @@ export function BuscarLibroModal({
       if (!downloadRes.ok) throw new Error("No se pudo descargar el archivo del repositorio público.");
 
       const blob = await downloadRes.blob();
-      const file = new File([blob], `${book.title}.pdf`, { type: "application/pdf" });
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No autenticado");
 
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("title", `${book.title} (${book.authors.join(", ")})`);
-      formData.append("kind", "texto_basico");
+      const cleanFileName = book.title.replace(/[^a-zA-Z0-9._-]/g, "_") + ".pdf";
+      const storagePath = `${user.id}/${subjectId}/${Date.now()}_${cleanFileName}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from("materiales")
+        .upload(storagePath, blob, { contentType: "application/pdf", upsert: true });
+
+      if (uploadErr) throw new Error(uploadErr.message);
 
       const uploadRes = await fetch(`/api/materias/${subjectId}/materiales`, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storagePath,
+          title: `${book.title} (${book.authors.join(", ")})`,
+          kind: "texto_basico",
+          sizeBytes: blob.size,
+          mimeType: "application/pdf",
+        }),
       });
 
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) throw new Error(uploadData.error || "Error al procesar el libro");
+      if (!uploadRes.ok) {
+        const text = await uploadRes.text().catch(() => "");
+        throw new Error(text || "Error al procesar el libro");
+      }
 
       setOpen(false);
       onImported();
