@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getGeminiClient, generateEmbedding } from "@/lib/gemini";
+import { getGeminiClient, generateEmbedding, generateStudyContent } from "@/lib/gemini";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -86,11 +86,8 @@ DIRECTRICES FUNDAMENTALES:
       : `PREGUNTA DEL ESTUDIANTE:\n${question}`;
 
     // 6. Generar respuesta con Gemini
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        { role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
-      ],
+    const response = await generateStudyContent(ai, {
+      contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
     });
 
     const answer = response.text || "No se pudo generar una respuesta.";

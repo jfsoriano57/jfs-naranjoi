@@ -62,7 +62,7 @@ async function extractPDFWithGeminiOCR(
   const base64Data = Buffer.from(buffer).toString("base64");
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.5-flash-lite",
     contents: [
       {
         role: "user",
@@ -104,7 +104,7 @@ export async function extractTextFromImage(
   const base64Data = buffer.toString("base64");
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.5-flash-lite",
     contents: [
       {
         role: "user",

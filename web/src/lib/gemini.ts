@@ -52,17 +52,53 @@ export async function getGeminiClient(): Promise<{
   );
 }
 
+export const PRIMARY_STUDY_MODEL = "gemini-3.5-flash-lite";
+export const FALLBACK_STUDY_MODELS = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.8-flash"];
+
+/**
+ * Genera contenido de estudio con reintentos automáticos en modelos compatibles.
+ */
+export async function generateStudyContent(
+  ai: GoogleGenAI,
+  params: {
+    contents: any;
+    systemInstruction?: string;
+    temperature?: number;
+  }
+) {
+  let lastError: unknown = null;
+  for (const model of FALLBACK_STUDY_MODELS) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: params.contents,
+        config: {
+          systemInstruction: params.systemInstruction,
+          temperature: params.temperature,
+        },
+      });
+      return response;
+    } catch (err) {
+      lastError = err;
+      console.warn(`Aviso: Error con modelo ${model}, intentando siguiente...`);
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Genera el vector embedding (768 dimensiones) para un fragmento de texto usando Gemini.
  */
 export async function generateEmbedding(ai: GoogleGenAI, text: string): Promise<number[]> {
   try {
     const response = await ai.models.embedContent({
-      model: "text-embedding-004",
+      model: "gemini-embedding-001",
       contents: text,
+      config: {
+        outputDimensionality: 768,
+      },
     });
 
-    // En el nuevo SDK puede ser response.embeddings[0]?.values o response.embedding?.values
     const resAny = response as unknown as {
       embedding?: { values?: number[] };
       embeddings?: Array<{ values?: number[] }>;

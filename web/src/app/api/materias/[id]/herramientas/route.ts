@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getGeminiClient } from "@/lib/gemini";
+import { getGeminiClient, generateStudyContent } from "@/lib/gemini";
 import { NextResponse } from "next/server";
 
 export async function POST(
@@ -39,8 +39,7 @@ Incluye:
 MATERIALES:
 ${contextText || "Usa conocimiento general de la materia si el contexto es breve."}`;
 
-      const res = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+      const res = await generateStudyContent(ai, {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       });
 
@@ -63,8 +62,7 @@ Devuelve únicamente el array JSON válido sin bloques markdown adicionales.
 MATERIALES:
 ${contextText || "Genera preguntas típicas del programa universitario estándar de la materia."}`;
 
-      const res = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+      const res = await generateStudyContent(ai, {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       });
 
@@ -92,8 +90,7 @@ Devuelve únicamente un array JSON con esta estructura:
 MATERIALES:
 ${contextText || "Conceptos esenciales de la materia."}`;
 
-      const res = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+      const res = await generateStudyContent(ai, {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       });
 
@@ -116,8 +113,7 @@ Incluye temas a repasar cada día y técnicas recomendadas (fórmulas a memoriza
 MATERIALES DE LA MATERIA:
 ${contextText || "Estructura estándar de la materia."}`;
 
-      const res = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+      const res = await generateStudyContent(ai, {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       });
 
