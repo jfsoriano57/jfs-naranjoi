@@ -33,13 +33,53 @@ export async function POST(
   }
 
   try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
-    const title = (formData.get("title") as string) || file?.name || "Sin título";
-    const kind = (formData.get("kind") as string) || "otro";
+    const serviceClient = createServiceClient();
+    let title = "Sin título";
+    let kind = "otro";
+    let mimeType = "application/pdf";
+    let sizeBytes = 0;
+    let storagePath: string | null = null;
+    let fileBuffer: ArrayBuffer | null = null;
 
-    if (!file) {
-      return NextResponse.json({ error: "No se proporcionó ningún archivo" }, { status: 400 });
+    const contentType = request.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      const body = await request.json();
+      storagePath = body.storagePath;
+      title = body.title || "Sin título";
+      kind = body.kind || "otro";
+      sizeBytes = body.sizeBytes || 0;
+      mimeType = body.mimeType || "application/pdf";
+
+      if (!storagePath) {
+        return NextResponse.json({ error: "No se especificó la ruta del archivo" }, { status: 400 });
+      }
+
+      // Descargar desde Supabase Storage usando service role client
+      const { data: fileBlob, error: downloadErr } = await serviceClient.storage
+        .from("materiales")
+        .download(storagePath);
+
+      if (downloadErr || !fileBlob) {
+        return NextResponse.json(
+          { error: `No se pudo descargar el archivo de almacenamiento: ${downloadErr?.message || "Archivo no encontrado"}` },
+          { status: 500 }
+        );
+      }
+
+      fileBuffer = await fileBlob.arrayBuffer();
+    } else {
+      // Fallback FormData para archivos pequeños
+      const formData = await request.formData();
+      const file = formData.get("file") as File | null;
+      if (!file) {
+        return NextResponse.json({ error: "No se proporcionó ningún archivo" }, { status: 400 });
+      }
+      title = (formData.get("title") as string) || file.name || "Sin título";
+      kind = (formData.get("kind") as string) || "otro";
+      mimeType = file.type || "application/pdf";
+      sizeBytes = file.size;
+      fileBuffer = await file.arrayBuffer();
     }
 
     // Comprobar que el estudiante tiene configurada su clave de IA
@@ -54,8 +94,9 @@ export async function POST(
         title,
         kind,
         source: "subido",
-        mime_type: file.type,
-        size_bytes: file.size,
+        storage_path: storagePath,
+        mime_type: mimeType,
+        size_bytes: sizeBytes,
         status: "procesando",
       })
       .select()
@@ -65,24 +106,19 @@ export async function POST(
       return NextResponse.json({ error: "Error al registrar el documento" }, { status: 500 });
     }
 
-    const fileBuffer = await file.arrayBuffer();
     let pages: ExtractedPage[] = [];
 
     // 2. Extraer texto según el formato
-    if (file.type === "application/pdf") {
+    if (mimeType === "application/pdf" || title.toLowerCase().endsWith(".pdf")) {
       pages = await extractTextFromPDF(fileBuffer, ai);
     } else if (
-      file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-      file.name.endsWith(".docx")
+      mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      title.toLowerCase().endsWith(".docx")
     ) {
       pages = await extractTextFromDocx(Buffer.from(fileBuffer));
-    } else if (file.type.startsWith("image/")) {
-      pages = await extractTextFromImage(Buffer.from(fileBuffer), file.type, ai);
-    } else if (file.type === "text/plain" || file.name.endsWith(".txt")) {
-      const textContent = new TextDecoder().decode(fileBuffer);
-      pages = [{ pageNumber: 1, text: textContent }];
+    } else if (mimeType.startsWith("image/")) {
+      pages = await extractTextFromImage(Buffer.from(fileBuffer), mimeType, ai);
     } else {
-      // Intento genérico de texto
       const textContent = new TextDecoder().decode(fileBuffer);
       pages = [{ pageNumber: 1, text: textContent }];
     }
@@ -98,42 +134,38 @@ export async function POST(
     // 3. Dividir en fragmentos (chunks)
     const chunks = chunkPages(pages);
 
-    // 4. Generar embeddings y guardar en la base de datos
-    // Usamos el cliente de servicio para optimizar inserción por lotes
-    const serviceClient = createServiceClient();
+    // 4. Preparar inserción de fragmentos
+    // PostgreSQL Full-Text Search (FTS) funciona instantáneamente para todos los fragmentos
+    const allChunksToInsert = chunks.map((c) => ({
+      user_id: user.id,
+      subject_id: subjectId,
+      document_id: docRecord.id,
+      page: c.pageNumber,
+      content: c.content,
+      embedding: null as string | null,
+    }));
 
-    const chunkInserts = [];
-    for (const chunk of chunks) {
+    // Generar embeddings para una muestra clave de fragmentos en paralelo
+    // para mantener el tiempo de respuesta en Vercel rápido y sin timeouts
+    const EMBED_COUNT = Math.min(chunks.length, 25);
+    const embedPromises = chunks.slice(0, EMBED_COUNT).map(async (c, idx) => {
       try {
-        const embedding = await generateEmbedding(ai, chunk.content);
-        chunkInserts.push({
-          user_id: user.id,
-          subject_id: subjectId,
-          document_id: docRecord.id,
-          page: chunk.pageNumber,
-          content: chunk.content,
-          embedding: JSON.stringify(embedding),
-        });
+        const emb = await generateEmbedding(ai, c.content);
+        allChunksToInsert[idx].embedding = JSON.stringify(emb);
       } catch (embErr) {
-        console.warn("Fallo embedding para un fragmento, guardando sin vector:", embErr);
-        chunkInserts.push({
-          user_id: user.id,
-          subject_id: subjectId,
-          document_id: docRecord.id,
-          page: chunk.pageNumber,
-          content: chunk.content,
-          embedding: null,
-        });
+        // Fallback transparente: FTS cubre los fragmentos sin vector
       }
-    }
+    });
 
-    if (chunkInserts.length > 0) {
-      const { error: insertChunksErr } = await serviceClient
-        .from("chunks")
-        .insert(chunkInserts);
+    await Promise.allSettled(embedPromises);
 
-      if (insertChunksErr) {
-        console.error("Error al insertar chunks:", insertChunksErr);
+    // Insertar en Supabase en lotes de 150 filas
+    const BATCH_SIZE = 150;
+    for (let i = 0; i < allChunksToInsert.length; i += BATCH_SIZE) {
+      const batch = allChunksToInsert.slice(i, i + BATCH_SIZE);
+      const { error: insErr } = await serviceClient.from("chunks").insert(batch);
+      if (insErr) {
+        console.error("Error al insertar lote de chunks:", insErr);
       }
     }
 
@@ -149,7 +181,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       document_id: docRecord.id,
-      chunks_count: chunkInserts.length,
+      chunks_count: allChunksToInsert.length,
       pages_count: pages.length,
     });
   } catch (err: unknown) {

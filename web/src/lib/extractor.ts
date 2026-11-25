@@ -28,7 +28,7 @@ export async function extractTextFromPDF(
 
       // Verificar si está prácticamente vacío (PDF escaneado)
       const totalChars = pages.reduce((acc, p) => acc + p.text.length, 0);
-      if (totalChars < 100 && ai) {
+      if (totalChars < 100 && ai && buffer.byteLength < 15 * 1024 * 1024) {
         console.log("PDF aparentemente escaneado; ejecutando OCR con Gemini...");
         return await extractPDFWithGeminiOCR(buffer, ai);
       }
@@ -38,7 +38,7 @@ export async function extractTextFromPDF(
       return [{ pageNumber: 1, text: (rawText as string).trim() }];
     }
 
-    if (ai) {
+    if (ai && buffer.byteLength < 15 * 1024 * 1024) {
       return await extractPDFWithGeminiOCR(buffer, ai);
     }
 

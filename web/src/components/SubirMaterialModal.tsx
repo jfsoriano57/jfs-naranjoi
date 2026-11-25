@@ -4,6 +4,8 @@ import { useState } from "react";
 import { UploadCloud, X, FileText, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { DocumentKind } from "@/types";
 
+import { createClient } from "@/lib/supabase/client";
+
 const TIPOS_MATERIAL: { value: DocumentKind; label: string; desc: string }[] = [
   { value: "texto_basico", label: "Texto Básico / Libro", desc: "Manual, libro guía o bibliografía de la materia" },
   { value: "programa", label: "Programa de la Materia", desc: "Sílabo, contenido temático y fechas de examen" },
@@ -45,23 +47,55 @@ export function SubirMaterialModal({
 
     setLoading(true);
     setError(null);
-    setStepStatus("Subiendo y extrayendo contenido del documento...");
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("title", title);
-      formData.append("kind", kind);
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("Sesión no iniciada. Por favor recarga e inicia sesión.");
+      }
 
-      setStepStatus("Generando fragmentos y vectores de conocimiento...");
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      setStepStatus(`Subiendo archivo a tu bóveda privada (${sizeMb} MB)...`);
+
+      // Subir directamente a Supabase Storage (evita el límite de 4.5 MB de Vercel)
+      const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storagePath = `${user.id}/${subjectId}/${Date.now()}_${cleanFileName}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from("materiales")
+        .upload(storagePath, file, {
+          contentType: file.type || "application/octet-stream",
+          upsert: true,
+        });
+
+      if (uploadErr) {
+        throw new Error(`Error al subir a tu almacenamiento: ${uploadErr.message}`);
+      }
+
+      setStepStatus("Extrayendo texto y preparando temas de estudio...");
       const res = await fetch(`/api/materias/${subjectId}/materiales`, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storagePath,
+          title: title.trim() || file.name,
+          kind,
+          sizeBytes: file.size,
+          mimeType: file.type || "application/pdf",
+        }),
       });
 
-      const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Error al procesar el archivo");
+        const text = await res.text().catch(() => "");
+        let errMessage = "Error al procesar el archivo";
+        try {
+          const parsed = JSON.parse(text);
+          errMessage = parsed.error || errMessage;
+        } catch {
+          errMessage = text || `Error del servidor (${res.status})`;
+        }
+        throw new Error(errMessage);
       }
 
       setOpen(false);
